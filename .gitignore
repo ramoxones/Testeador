@@ -1,0 +1,40 @@
+# ==================================
+# 1. Entorno Virtual y Dependencias
+# ==================================
+# Excluye la carpeta del entorno virtual (venv)
+/venv/
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+
+# ==================================
+# 2. Archivos Secretos y de Entorno
+# ==================================
+# ¡CRUCIAL! Excluye el archivo que contiene la SECRET_KEY, contraseñas de DB y claves API (OpenRouter)
+# No debe subirse a Git.
+/.env
+
+# ==================================
+# 3. Archivos de Django y Bases de Datos
+# ==================================
+# Archivos de base de datos SQLite (si alguna vez la usaste o la vuelves a usar)
+/db.sqlite3
+
+# Archivos de la base de datos de sesión de pruebas (si usas PostgreSQL localmente)
+/session_db/ 
+
+# Archivos estáticos y media de usuario que no deben ser versionados
+/static_collected/
+/media/
+/logs/
+
+# ==================================
+# 4. Herramientas y IDEs (VS Code, PyCharm, etc.)
+# ==================================
+# Carpeta de configuración de PyCharm
+/.idea/
+# Carpeta de configuración de VS Code
+/.vscode/
+
+# Archivos temporales de Windows
+Thumbs.db
