@@ -36,74 +36,77 @@ class TestInicial(APIView):
             # 3. Llamamos al servicio de IA
             ai_service = OpenRouterAIService(system_prompt=test.ai_prompt_instructions)
 
-            mensaje_user_inicial = request.data.get("message", "Hola, estoy listo para empezar el test.")
-            ai_response_data = ai_service.start_conversacion(mensaje_user_inicial)
+            message_user_initial = request.data.get("message", "Hola, estoy listo para empezar el test.")
+            ai_response_data = ai_service.start_conversacion(message_user_initial)
 
             if 'error' in ai_response_data:
                 # Si la IA falla, abortamos la transición
                 return Response(ai_response_data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
             # 4. Actualizar el chat_log
-            mensaje_asistente = ai_response_data["choices"][0]["message"]
+            message_assistant = ai_response_data["choices"][0]["message"]
             execution.chat_log = [
                 {
                     "role": "user",
-                    "content": mensaje_user_inicial,
+                    "content": message_user_initial,
                 },
                 {
-                    "role": "asistente",
-                    "content": mensaje_asistente["content"],
+                    "role": "assistant",
+                    "content": message_assistant["content"],
                 }
             ]
             execution.save()
 
             return Response({
                 "execution_id": execution.id,
-                "response": mensaje_asistente["content"],
+                "response": message_assistant["content"],
             }, status=status.HTTP_200_OK)
 
 
 class TestContinueView(APIView):
-    # Endpoint para enviar el siguiente mensaje
+    # Endpoint para enviar el siguiente message
     def post(self, request, execution_id):
         execution = get_object_or_404(TestExecution, pk=execution_id, user=request.user)
-        mensaje_nuevo_usuario = request.data.get("message")
+        message_nuevo_usuario = request.data.get("message")
 
         if execution.finish_time:
             return Response({
                 "error": "Este test ya ha finalizado."
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        if not mensaje_nuevo_usuario:
+        if not message_nuevo_usuario:
             return Response({
-                "error": "Mensaje de usuario requerido."
+                "error": "message de usuario requerido."
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # 1. Llamar al servicio de IA
         ai_service = OpenRouterAIService()
-        ai_response_data = ai_service.continuar_conversacion(execution.chat_log, mensaje_nuevo_usuario)
+        ai_response_data = ai_service.continuar_conversacion(execution.chat_log, message_nuevo_usuario)
 
         if 'error' in ai_response_data:
             return Response(ai_response_data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         # 2. Actualizar el chat_log
-        mensaje_asistente = ai_response_data["choices"][0]["message"]
+        message_assistant = ai_response_data["choices"][0]["message"]
 
         execution.chat_log.append(
             {
                 "role": "user",
-                "content": mensaje_nuevo_usuario,
-            },
+                "content": message_nuevo_usuario,
+            }
+        )
+
+        execution.chat_log.append(
             {
-                "role": "asistente",
-                "content": mensaje_asistente["content"],
+                "role": "assistant",
+                "content": message_assistant["content"],
             }
         )
 
         execution.save()
 
         return Response({
-            "response": mensaje_asistente["content"],
+            "response": message_assistant["content"],
         }, status=status.HTTP_200_OK)
 
 class TestFinalView(APIView):
@@ -116,7 +119,7 @@ class TestFinalView(APIView):
                 "error": "Este test ya ha finalizado."
             })
 
-        # 1. Marcar como finalizado (para facturación y evitar más mensajes)
+        # 1. Marcar como finalizado (para facturación y evitar más messages)
         execution.finish_time = timezone.now()
 
         # 2. Llamada al servicio de evaluación
@@ -124,15 +127,15 @@ class TestFinalView(APIView):
         ai_service = OpenRouterAIService()
 
         # Usar el chat_log de la ejecución y los criterios del Test
-        evaluacion_result = ai_service.evaluar_test(execution.chat_log, test.evaluacion_criteria)
+        evaluation_result = ai_service.evaluar_test(execution.chat_log, test.evaluation_criteria)
 
-        if 'error' in evaluacion_result:
+        if 'error' in evaluation_result:
             # Si falla registramos el fallo y el fin del test
             execution.save()
-            return Response(evaluacion_result, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(evaluation_result, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         # 3. Guardar el resultado y el log
-        execution.evaluacion_result = evaluacion_result
+        execution.evaluation_result = evaluation_result
         execution.save()
 
         # TODO lógica para generar el PDF
@@ -140,5 +143,5 @@ class TestFinalView(APIView):
         return Response({
             "message": "Test finalizado y evaluación completada",
             "evaluation_id": execution.id,
-            "results": evaluacion_result,
+            "results": evaluation_result,
         }, status=status.HTTP_200_OK)

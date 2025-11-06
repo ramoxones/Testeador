@@ -4,7 +4,7 @@ import requests
 from django.conf import settings
 
 OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
-MODEL_NAME = 'google/gemini-2.0-flash-exp:free'
+MODEL_NAME = 'mistralai/mistral-7b-instruct:free'
 
 class OpenRouterAIService:
     # Clase para manejar la comunicación con la API de OpenRouter
@@ -18,15 +18,17 @@ class OpenRouterAIService:
             "X-Title": settings.YOUR_SITE_NAME,
         }
 
-    def _send_request(self, messages: list):
+    def _send_request(self, messages: list, force_json: bool=False):
         # Ejecuta la petición HTTP POST
         data = {
             "model": MODEL_NAME,
             "messages": messages,
-            "response_format": {
-                "type": "json", # Asegura que la IA se esfuerce en devolver un objeto JSON
-            }
         }
+
+        if force_json: 
+            data["response_format"] = {
+                "type": "json_object", # Asegura que la IA se esfuerce en devolver un objeto JSON
+            }
 
         try:
             response = requests.post(OPENROUTER_URL, headers=self.base_headers, json=data)
@@ -63,13 +65,13 @@ class OpenRouterAIService:
 
         return self._send_request(messages)
 
-    def evaluar_test(self, chat_log: list, evaluacion_criteria: dict) -> dict:
+    def evaluar_test(self, chat_log: list, evaluation_criteria: dict) -> dict:
         # Envia el historial completo de la conversación para una evaluación estructurada
         evaluation_prompt = f"""
         TAREA: Analiza el historial de conversación proporcionado a continuación. 
         Evalúa al usuario basándote en los siguientes criterios, usando una escala de 1 a 5 (siendo 5 el mejor).
 
-        Criterios de Evaluación: {json.dumps(evaluacion_criteria)}
+        Criterios de Evaluación: {json.dumps(evaluation_criteria)}
 
         FORMATO DE SALIDA: Debes responder ÚNICAMENTE con un objeto JSON válido, sin preámbulos.
         El objeto debe contener:
@@ -85,20 +87,42 @@ class OpenRouterAIService:
             "content": evaluation_prompt,
         }]
 
-        response_data = self._send_request(mensajes_enviar)
+        response_data = self._send_request(mensajes_enviar, force_json=True)
 
         if 'error' in response_data:
             return response_data
 
         try:
             content = response_data['choices'][0]['message']['content'].strip()
-            # Limpiar posibles bloques de código (```json ... ```)
-            if content.startswith('```json') and content.endswith('```'):
-                content = content[7:-3].strip()
+
+            # Eliminar bloques con Markdonw si existen
+            if content.startswith('```'):
+                content = '\n'.join(content.splitlines()[1:])
+
+                if content.endswith('```'):
+                    content = content[:-3].strip()
 
             return json.loads(content)
 
         except (json.JSONDecodeError, KeyError) as err:
-            return {
-                "error": "Error de procesamiento de JSON de la IA"
-            }
+            try:
+                start_index = content.find('{')
+                end_index = content.rfind('}')
+
+                if start_index != -1 and end_index != -1 and end_index < start_index:
+                    # Recortar la cadena al objeto JSON
+                    cleaned_content = content[start_index:end_index + 1]
+                    return json.loads(cleaned_content)
+
+                # Si no se encuentra un JSON válido lanzamos el error
+                raise json.JSONDecodeError("No se pudo aislar un objeto JSON válido", content, 0)
+
+            except json.JSONDecodeError:
+                return {
+                    "error": "Error de procesamiento de JSON de la IA (Fallo al aislar el JSON válido)"
+                }
+
+            except KeyError:
+                return {
+                    "error": "Error de procesamiento de JSON de la IA (Estructura de respuesta inesperada)"
+                }
