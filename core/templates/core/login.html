@@ -1,0 +1,25 @@
+{% extends 'core/base.html' %}
+{% block title %}Iniciar sesión{% endblock %}
+{% block content %}
+  <div class="card" style="max-width: 480px; margin: 1rem auto;">
+    <h2 style="margin-top:0">Iniciar sesión</h2>
+    {% if messages %}
+      <div class="msg-error">
+        {% for message in messages %}
+          <div>{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <form method="post" class="grid">
+      {% csrf_token %}
+      <label>Usuario</label>
+      <input type="text" name="username" required />
+      <label>Contraseña</label>
+      <input type="password" name="password" required />
+      <div class="controls">
+        <button class="btn" type="submit">Entrar</button>
+        <a class="link" href="{% url 'register' %}">Registrarme</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

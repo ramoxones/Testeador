@@ -1,0 +1,27 @@
+{% extends 'core/base.html' %}
+{% block title %}Registrarse{% endblock %}
+{% block content %}
+  <div class="card" style="max-width: 520px; margin: 1rem auto;">
+    <h2 style="margin-top:0">Crear una cuenta</h2>
+    {% if messages %}
+      <div class="msg-error">
+        {% for message in messages %}
+          <div>{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <form method="post" class="grid">
+      {% csrf_token %}
+      <label>Usuario</label>
+      <input type="text" name="username" required />
+      <label>Email</label>
+      <input type="email" name="email" />
+      <label>Contraseña</label>
+      <input type="password" name="password" required />
+      <div class="controls">
+        <button class="btn" type="submit">Registrarme</button>
+        <a class="link" href="{% url 'login' %}">Ya tengo cuenta</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

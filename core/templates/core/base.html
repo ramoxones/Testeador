@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Testeador{% endblock %}</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #111111;
+      --muted: #666;
+      --primary: #0b74ff;
+      --primary-hover: #085ed0;
+      --border: #e5e7eb;
+      --surface: #f9fafb;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif; margin: 0; color: var(--fg); background: var(--bg); }
+    .container { max-width: 1000px; margin: 0 auto; padding: 1.5rem; }
+    .topbar { display:flex; justify-content: space-between; align-items:center; padding: 1rem 0; border-bottom: 1px solid var(--border); }
+    .topbar h1 { margin: 0; font-size: 1.25rem; }
+    a, button { cursor: pointer; }
+    .btn { background: var(--primary); color: #fff; border: none; padding: 0.5rem 0.8rem; border-radius: 8px; }
+    .btn:hover { background: var(--primary-hover); }
+    .link { color: var(--primary); text-decoration: none; }
+    .card { border: 1px solid var(--border); border-radius: 12px; padding: 1rem; background: #fff; }
+    .chat { margin-top: 1rem; border: 1px solid var(--border); padding: 1rem; border-radius: 12px; max-width: 800px; background: #fff; }
+    .msg { padding: 0.45rem 0.6rem; margin-bottom: 0.5rem; border-radius: 8px; }
+    .user { background:#eef6ff; }
+    .assistant { background:#f7f7f7; }
+    .controls { display:flex; gap:0.5rem; margin-top:0.5rem; }
+    .hidden { display:none; }
+    .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+    pre { white-space: pre-wrap; }
+    input, select { padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; }
+    label { color: var(--muted); font-size: 0.9rem; }
+    .msg-error { color: #b00020; margin-bottom: 0.75rem; }
+    .grid { display: grid; gap: 0.75rem; }
+    .muted { color: var(--muted); margin-right: 0.75rem; }
+  </style>
+  {% block extra_styles %}{% endblock %}
+  {% block head %}{% endblock %}
+  </head>
+  <body>
+    <div class="container">
+      <div class="topbar">
+        <h1>Testeador</h1>
+        <div>
+          {% if request.user.is_authenticated %}
+            <span class="muted">Usuario: {{ request.user.username }}</span>
+            <a class="link" href="{% url 'logout' %}">Salir</a>
+          {% else %}
+            <a class="link" href="{% url 'login' %}">Entrar</a>
+          {% endif %}
+        </div>
+      </div>
+      {% block content %}{% endblock %}
+    </div>
+  </body>
+</html>

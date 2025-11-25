@@ -5,6 +5,7 @@ from django.conf import settings
 
 OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 MODEL_NAME = 'mistralai/mistral-7b-instruct:free'
+FALLBACK_MODEL = 'openrouter/auto'
 
 class OpenRouterAIService:
     # Clase para manejar la comunicación con la API de OpenRouter
@@ -18,11 +19,14 @@ class OpenRouterAIService:
             "X-Title": settings.YOUR_SITE_NAME,
         }
 
-    def _send_request(self, messages: list, force_json: bool=False):
+    def _send_request(self, messages: list, force_json: bool=False, model_name: str=None):
         # Ejecuta la petición HTTP POST
         data = {
-            "model": MODEL_NAME,
+            "model": model_name or MODEL_NAME,
             "messages": messages,
+            # algunos parámetros para evitar respuestas vacías
+            "temperature": 0.7,
+            "max_tokens": 256,
         }
 
         if force_json: 
@@ -54,16 +58,39 @@ class OpenRouterAIService:
             "content": initial_user_message,
         })
 
-        return self._send_request(messages)
+        # Primer intento con el modelo definido
+        resp = self._send_request(messages)
+        # Si la respuesta es vacía o solo tokens tipo <s>, hacer fallback
+        try:
+            content = resp.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        except Exception:
+            content = ''
+        if not content or content in {"<s>", "</s>", "<bos>", "<eos>"}:
+            resp = self._send_request(messages, model_name=FALLBACK_MODEL)
+        return resp
 
     def continuar_conversacion(self, chat_history: list, new_user_message: str):
-        # Continua con la conversación asumiendo que el chat_history ya incluye el system_prompt
-        messages = chat_history + [{
+        # Continua la conversación asegurando que el system_prompt esté presente al inicio
+        messages = []
+        if self.system_prompt:
+            messages.append({
+                "role": "system",
+                "content": self.system_prompt,
+            })
+        messages.extend(chat_history)
+        messages.append({
             "role": "user",
             "content": new_user_message,
-        }]
+        })
 
-        return self._send_request(messages)
+        resp = self._send_request(messages)
+        try:
+            content = resp.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        except Exception:
+            content = ''
+        if not content or content in {"<s>", "</s>", "<bos>", "<eos>"}:
+            resp = self._send_request(messages, model_name=FALLBACK_MODEL)
+        return resp
 
     def evaluar_test(self, chat_log: list, evaluation_criteria: dict) -> dict:
         # Envia el historial completo de la conversación para una evaluación estructurada
@@ -109,8 +136,8 @@ class OpenRouterAIService:
                 start_index = content.find('{')
                 end_index = content.rfind('}')
 
-                if start_index != -1 and end_index != -1 and end_index < start_index:
-                    # Recortar la cadena al objeto JSON
+                if start_index != -1 and end_index != -1 and end_index > start_index:
+                    # Recortar la cadena al objeto JSON (contenido basura antes/después)
                     cleaned_content = content[start_index:end_index + 1]
                     return json.loads(cleaned_content)
 

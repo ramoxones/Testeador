@@ -1,0 +1,511 @@
+{% extends 'core/base.html' %}
+{% block title %}Panel - Realizar Test{% endblock %}
+{% block content %}
+  <h2 style="margin-top:0">Panel</h2>
+
+  {% if request.user.is_staff or request.user.is_superuser %}
+  <section class="chat" style="background:#fafafa;">
+    <h2>Acciones de Administrador</h2>
+    <div class="controls" style="flex-wrap:wrap;">
+      <style>
+        .two-cols { display:flex; gap:1rem; align-items:flex-start; }
+        .flex-1 { flex: 1 1 0; }
+        .subcard { border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem; background:#fff; }
+        .q-list { list-style:none; padding:0; margin:0.5rem 0; border:1px solid var(--border); border-radius:8px; background:#fff; }
+        .q-item { display:flex; align-items:center; gap:0.5rem; padding:0.5rem; border-bottom:1px solid var(--border); }
+        .q-item:last-child { border-bottom:none; }
+        .drag { cursor: grab; user-select:none; }
+        .q-text { flex:1; }
+        .btn-small { padding:0.25rem 0.5rem; border-radius:6px; }
+        .btn-icon { background:#eee; color:#333; border:1px solid var(--border); }
+        .btn-icon:hover { background:#e5e5e5; }
+        .disabled-block { opacity:0.5; }
+        .tests-list { list-style:none; padding:0; margin:0.5rem 0; border:1px solid var(--border); border-radius:8px; background:#fff; }
+        .tests-item { display:flex; align-items:center; gap:0.5rem; padding:0.5rem; border-bottom:1px solid var(--border); }
+        .tests-item:last-child { border-bottom:none; }
+        .tests-name { flex:1; }
+      </style>
+      <div class="card" style="margin-top:0.25rem; width:100%; max-width:800px;">
+        <h3 style="margin-top:0">Listado de tests</h3>
+        <small class="mono">Gestiona los tests existentes. Puedes eliminarlos si ya no los necesitas.</small>
+        <ul id="testsList" class="tests-list"></ul>
+      </div>
+      <div class="card" style="margin-top:0.25rem; width:100%; max-width:800px;">
+        <h3 style="margin-top:0">Crear test</h3>
+        <small class="mono">Elige un modo y crea un test: por tema (izquierda) o por preguntas (derecha).</small>
+        <div class="two-cols" style="margin-top:0.75rem;">
+          <div id="colTopic" class="subcard flex-1">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <input type="radio" name="customMode" value="tema" id="radioTema" checked />
+              <label for="radioTema" style="margin:0;">Por tema</label>
+            </div>
+            <div class="grid" style="margin-top:0.5rem;">
+              <label for="topicInput">Tema</label>
+              <input id="topicInput" type="text" placeholder="Ej: Python básico" />
+            </div>
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem;">
+              <label for="topicCount">Número de preguntas</label>
+              <input id="topicCount" type="number" min="1" max="50" value="5" style="width:100px;" />
+            </div>
+            <small class="mono">Se generarán preguntas sobre el tema indicado.</small>
+          </div>
+          <div id="colQuestions" class="subcard flex-1">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <input type="radio" name="customMode" value="preguntas" id="radioPreguntas" />
+              <label for="radioPreguntas" style="margin:0;">Por preguntas</label>
+            </div>
+            <div class="grid" style="margin-top:0.5rem;">
+              <label for="testNameInput">Nombre del test</label>
+              <input id="testNameInput" type="text" placeholder="Ej: Entrevista de Python" />
+            </div>
+            <ul id="questionsList" class="q-list"></ul>
+            <div class="controls">
+              <input id="newQuestionInput" type="text" placeholder="Escribe una pregunta" style="flex:1;" />
+              <button class="btn btn-small" id="addQuestionBtn" title="Añadir">+</button>
+            </div>
+            <small class="mono">Puedes añadir, borrar (✖) y reordenar (☰) las preguntas.</small>
+          </div>
+        </div>
+        <div class="controls" style="margin-top:0.75rem; display:flex; justify-content:center;">
+          <button class="btn" id="btnCreateCustom">Crear Test</button>
+        </div>
+      </div>
+      <hr style="margin:1rem 0; border:none; border-top:1px solid var(--border);">
+      <div class="card" style="margin-top:0.25rem; width:100%; max-width:800px;">
+        <h3 style="margin-top:0">Descargar tests</h3>
+        <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
+          <label for="usernameExport">Descargar tests por usuario:</label>
+          <input id="usernameExport" type="text" placeholder="usuario" />
+          <button class="btn" id="btnExportByUser">Descargar JSON</button>
+        </div>
+      </div>
+    </div>
+    
+  </section>
+  {% endif %}
+
+  {% if not request.user.is_staff and not request.user.is_superuser %}
+  <p id="startHint">Haz clic en "Iniciar Test" para comenzar.</p>
+  <button class="btn" id="btnStart">Iniciar Test</button>
+
+  <!-- Skeleton de carga mientras se prepara el test -->
+  <style>
+    .skeleton { display: none; max-width: 800px; margin-top: 1rem; }
+    .skeleton.show { display: block; }
+    .sk-block { background: linear-gradient(90deg, #eee 25%, #f5f5f5 37%, #eee 63%); background-size: 400% 100%; animation: sk-shimmer 1.4s ease infinite; border-radius: 10px; margin-bottom: 0.75rem; }
+    .sk-line { height: 14px; }
+    .sk-big { height: 64px; }
+    .sk-chip { height: 38px; width: 120px; display: inline-block; margin-right: 8px; }
+    /* Skeleton para el estado de "escribiendo" */
+    .typing-skeleton { background: linear-gradient(90deg, #eee 25%, #f5f5f5 37%, #eee 63%); background-size: 400% 100%; animation: sk-shimmer 1.4s ease infinite; border-radius: 8px; }
+    /* Alineación de mensajes en el chat */
+    #testArea { max-width: 800px; }
+    #chat { display: block; max-height: 55vh; min-height: 30vh; overflow-y: auto; padding-right: 8px; }
+    .msg { max-width: 80%; padding: 0.5rem 0.75rem; border-radius: 10px; border: 1px solid #e5e5e5; margin: 6px 0; }
+    .msg.assistant { margin-right: auto; background: #ffffff; }
+    .msg.user { margin-left: auto; background: #dcf7ff; border-color: #c8eaf5; }
+    .controls { position: sticky; bottom: 0; background: #fff; z-index: 1; gap: 0.5rem; padding: 0.5rem 0; border-top: 1px solid var(--border); }
+    @keyframes sk-shimmer { 0%{ background-position: 0 0 } 100%{ background-position: -200% 0 } }
+  </style>
+  <div id="loadingSkeleton" class="skeleton">
+    <div class="sk-block sk-line" style="width: 60%"></div>
+    <div class="sk-block sk-line" style="width: 85%"></div>
+    <div class="sk-block sk-line" style="width: 75%"></div>
+    <div class="sk-block sk-big" style="width: 100%"></div>
+    <div class="sk-chip"></div>
+    <div class="sk-chip"></div>
+    <div class="sk-chip" style="width: 180px"></div>
+  </div>
+
+  <div id="testArea" class="hidden">
+    <h2>Conversación del Test</h2>
+    <div id="chat" class="chat"></div>
+    <div class="controls">
+      <input id="userInput" type="text" placeholder="Escribe tu respuesta..." style="flex:1; padding:0.5rem;" />
+      <button class="btn" id="btnSend">Enviar</button>
+      <button class="btn" id="btnFinish">Finalizar</button>
+      {% if request.user.is_staff or request.user.is_superuser %}
+      <button class="btn" id="btnDownload">Descargar JSON</button>
+      {% endif %}
+    </div>
+    <div id="eval" class="mono"></div>
+  </div>
+  {% endif %}
+
+  <script>
+    // CSRF helper
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    const btnStart = document.getElementById('btnStart');
+    const startHint = document.getElementById('startHint');
+    const btnSend = document.getElementById('btnSend');
+    const btnFinish = document.getElementById('btnFinish');
+    const btnDownload = document.getElementById('btnDownload');
+    const btnExportByUser = document.getElementById('btnExportByUser');
+    const usernameExport = document.getElementById('usernameExport');
+    const testsListEl = document.getElementById('testsList');
+    const colTopic = document.getElementById('colTopic');
+    const colQuestions = document.getElementById('colQuestions');
+    const radioTema = document.getElementById('radioTema');
+    const radioPreguntas = document.getElementById('radioPreguntas');
+    const topicInput = document.getElementById('topicInput');
+    const topicCount = document.getElementById('topicCount');
+    const questionsListEl = document.getElementById('questionsList');
+    const testNameInput = document.getElementById('testNameInput');
+    const newQuestionInput = document.getElementById('newQuestionInput');
+    const addQuestionBtn = document.getElementById('addQuestionBtn');
+    const btnCreateCustom = document.getElementById('btnCreateCustom');
+    const testArea = document.getElementById('testArea');
+    const chatDiv = document.getElementById('chat');
+    const inputEl = document.getElementById('userInput');
+    const loadingSkeleton = document.getElementById('loadingSkeleton');
+
+    let executionId = null;
+
+    function normalizeMsg(text) {
+      if (!text) return '';
+      let t = String(text);
+      // Quitar tokens comunes de modelos
+      t = t.replace(/<\/?s>/gi, '');          // <s> y </s>
+      t = t.replace(/<\/?(?:bos|eos)>/gi, ''); // <bos>, </bos>, <eos>, </eos>
+      t = t.replace(/\[\s*(?:OUT|OUTPUT|END|DONE)[^\]]*\]/gi, ''); // [OUT ...], [END ...]
+      // Normalizar espacios
+      t = t.replace(/[\t\r\f]+/g, ' ');
+      t = t.replace(/\s{2,}/g, ' ');
+      return t.trim();
+    }
+    function addMsg(role, content) {
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+      div.textContent = normalizeMsg(content);
+      chatDiv.appendChild(div);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+    }
+
+    if (btnStart) btnStart.addEventListener('click', async () => {
+      chatDiv.innerHTML = '';
+      document.getElementById('eval').innerHTML = '';
+      executionId = null;
+      // Ocultar el botón y el hint al iniciar
+      btnStart.style.display = 'none';
+      if (startHint) startHint.style.display = 'none';
+      // Mostrar skeleton y deshabilitar controles
+      if (loadingSkeleton) loadingSkeleton.classList.add('show');
+      if (btnSend) btnSend.disabled = true;
+      if (btnFinish) btnFinish.disabled = true;
+      // 1) Obtener test aleatorio
+      const r = await fetch('/api/tests/random/');
+      if (!r.ok) {
+        if (loadingSkeleton) loadingSkeleton.classList.remove('show');
+        alert('No se pudo obtener test aleatorio');
+        // Reaparecer botón si falló
+        btnStart.style.display = '';
+        if (startHint) startHint.style.display = '';
+        return;
+      }
+      const randomData = await r.json();
+      const testId = randomData.test_id;
+
+      // 2) Iniciar conversación (sin mostrar burbuja del usuario)
+      const initMsg = 'Hola, estoy listo para iniciar la evaluación.';
+      // Mostrar skeleton de "escribiendo" del asistente mientras inicia
+      const typingInit = document.createElement('div');
+      typingInit.className = 'msg assistant';
+      typingInit.innerHTML = '<div class="typing-skeleton" style="height:14px;width:70%"></div><div class="typing-skeleton" style="height:14px;width:40%;margin-top:6px"></div>';
+      chatDiv.appendChild(typingInit);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+      const r2 = await fetch(`/api/test/${testId}/initiate/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ message: initMsg })
+      });
+      const d2 = await r2.json();
+      if (!r2.ok) {
+        if (loadingSkeleton) loadingSkeleton.classList.remove('show');
+        alert(d2.error || 'Error al iniciar test');
+        // Quitar skeleton del asistente
+        typingInit.remove();
+        // Reaparecer botón si falló
+        btnStart.style.display = '';
+        if (startHint) startHint.style.display = '';
+        return;
+      }
+      // Quitar skeleton y mostrar respuesta del asistente
+      typingInit.remove();
+      executionId = d2.execution_id;
+      addMsg('assistant', d2.response);
+      // Ocultar skeleton y habilitar controles
+      if (loadingSkeleton) loadingSkeleton.classList.remove('show');
+      if (btnSend) btnSend.disabled = false;
+      if (btnFinish) btnFinish.disabled = false;
+      testArea.classList.remove('hidden');
+    });
+
+    // --- Lista editable de preguntas ---
+    const questions = [];
+    let questionsDisabled = false;
+    const esc = (s) => s.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    function renderQuestions() {
+      if (!questionsListEl) return;
+      questionsListEl.innerHTML = '';
+      questions.forEach((q, idx) => {
+        const li = document.createElement('li');
+        li.className = 'q-item';
+        li.draggable = true;
+        li.dataset.index = String(idx);
+        li.innerHTML = `<span class="drag" title="Arrastrar">☰</span><span class="q-text">${esc(q)}</span><button class="btn btn-small btn-icon" data-index="${idx}" title="Borrar" ${questionsDisabled ? 'disabled' : ''}>✖</button>`;
+        questionsListEl.appendChild(li);
+      });
+    }
+    function toggleTopicControls(disabled) {
+      if (topicInput) {
+        topicInput.disabled = disabled;
+        if (disabled) topicInput.value = '';
+      }
+      if (topicCount) {
+        topicCount.disabled = disabled;
+        if (disabled) topicCount.value = '';
+      }
+    }
+    function toggleQuestionsControls(disabled) {
+      questionsDisabled = disabled;
+      if (testNameInput) {
+        testNameInput.disabled = disabled;
+        if (disabled) testNameInput.value = '';
+      }
+      if (newQuestionInput) {
+        newQuestionInput.disabled = disabled;
+        if (disabled) newQuestionInput.value = '';
+      }
+      if (addQuestionBtn) addQuestionBtn.disabled = disabled;
+      if (questionsListEl) {
+        questionsListEl.querySelectorAll('button.btn-icon').forEach(b => { b.disabled = disabled; });
+      }
+      if (disabled) {
+        questions.length = 0;
+      }
+      renderQuestions();
+    }
+    if (questionsListEl) {
+      let dragSrcIndex = null;
+      questionsListEl.addEventListener('dragstart', (e) => {
+        const li = e.target.closest('li');
+        if (!li) return;
+        dragSrcIndex = Number(li.dataset.index);
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      questionsListEl.addEventListener('dragover', (e) => { e.preventDefault(); });
+      questionsListEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const li = e.target.closest('li');
+        if (!li || dragSrcIndex === null) return;
+        const dropIndex = Number(li.dataset.index);
+        if (dropIndex === dragSrcIndex) return;
+        const item = questions.splice(dragSrcIndex, 1)[0];
+        questions.splice(dropIndex, 0, item);
+        renderQuestions();
+        dragSrcIndex = null;
+      });
+      questionsListEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('button.btn-icon');
+        if (!btn) return;
+        const idx = Number(btn.dataset.index);
+        if (Number.isInteger(idx)) {
+          questions.splice(idx, 1);
+          renderQuestions();
+        }
+      });
+    }
+    if (addQuestionBtn) {
+      addQuestionBtn.addEventListener('click', () => {
+        const t = (newQuestionInput.value || '').trim();
+        if (!t) return;
+        questions.push(t);
+        newQuestionInput.value = '';
+        renderQuestions();
+      });
+    }
+    renderQuestions();
+    
+    // --- Listado de tests existentes (admin) ---
+    async function loadTests() {
+      if (!testsListEl) return;
+      testsListEl.innerHTML = '<li class="tests-item"><span class="tests-name">Cargando...</span></li>';
+      try {
+        const r = await fetch('/api/tests/list/');
+        const d = await r.json();
+        if (!r.ok) { testsListEl.innerHTML = '<li class="tests-item"><span class="tests-name">Error al cargar tests</span></li>'; return; }
+        const items = (d.tests || []);
+        testsListEl.innerHTML = '';
+        if (!items.length) {
+          testsListEl.innerHTML = '<li class="tests-item"><span class="tests-name">No hay tests disponibles</span></li>';
+          return;
+        }
+        items.forEach(t => {
+          const li = document.createElement('li');
+          li.className = 'tests-item';
+          const displayName = String(t.name || '').replace(/^\s*Test:\s*/i, '');
+          li.innerHTML = `<span class="tests-name">${displayName}</span><button class="btn btn-small btn-icon" data-id="${t.id}" title="Borrar">✖</button>`;
+          testsListEl.appendChild(li);
+        });
+      } catch (e) {
+        testsListEl.innerHTML = '<li class="tests-item"><span class="tests-name">Error de red</span></li>';
+      }
+    }
+    if (testsListEl) {
+      testsListEl.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button.btn-icon');
+        if (!btn) return;
+        const id = Number(btn.dataset.id);
+        if (!id) return;
+        if (!confirm('¿Seguro que quieres borrar este test?')) return;
+        const r = await fetch(`/api/tests/${id}/delete/`, { method: 'DELETE', headers: { 'X-CSRFToken': csrftoken } });
+        let d = {};
+        try { d = await r.json(); } catch {}
+        if (!r.ok) { alert(d.error || 'Error al borrar test'); return; }
+        loadTests();
+      });
+      loadTests();
+    }
+
+    // Selección exclusiva del modo
+    function applyMode(mode) {
+      if (mode === 'tema') {
+        colTopic && colTopic.classList.remove('disabled-block');
+        colQuestions && colQuestions.classList.add('disabled-block');
+        toggleTopicControls(false);
+        toggleQuestionsControls(true);
+      } else {
+        colQuestions && colQuestions.classList.remove('disabled-block');
+        colTopic && colTopic.classList.add('disabled-block');
+        toggleTopicControls(true);
+        toggleQuestionsControls(false);
+      }
+    }
+    if (radioTema) radioTema.addEventListener('change', () => applyMode('tema'));
+    if (radioPreguntas) radioPreguntas.addEventListener('change', () => applyMode('preguntas'));
+    applyMode('tema');
+
+    if (btnCreateCustom) {
+      btnCreateCustom.addEventListener('click', async () => {
+        const mode = (radioPreguntas && radioPreguntas.checked) ? 'preguntas' : 'tema';
+        let payload = { mode };
+        if (mode === 'tema') {
+          const topic = (topicInput.value || '').trim();
+          if (!topic) { alert('Introduce un tema'); return; }
+          payload.topic = topic;
+          let count = parseInt((topicCount && topicCount.value) ? topicCount.value : '', 10);
+          if (!Number.isFinite(count) || count < 1) count = 5;
+          payload.count = count;
+        } else {
+          if (!questions.length) { alert('Añade al menos una pregunta'); return; }
+          payload.questions = questions.slice();
+          const name = (testNameInput && testNameInput.value || '').trim();
+          if (name) payload.name = name;
+        }
+
+        const r = await fetch('/api/tests/create_custom/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (!r.ok) { alert(d.error || 'Error al crear test'); return; }
+        alert(`Test creado: ${d.name} (ID ${d.test_id})`);
+        // Reset sencillo
+        if (topicInput) topicInput.value = '';
+        if (topicCount) topicCount.value = '';
+        if (testNameInput) testNameInput.value = '';
+        questions.length = 0; renderQuestions();
+        // Refrescar listado sin recargar la página
+        if (typeof loadTests === 'function') loadTests();
+      });
+    }
+
+    if (btnExportByUser) {
+      btnExportByUser.addEventListener('click', async () => {
+        const uname = (usernameExport.value || '').trim();
+        if (!uname) { alert('Introduce el nombre de usuario'); return; }
+        const r = await fetch(`/api/tests/export_by_user/?username=${encodeURIComponent(uname)}`);
+        const d = await r.json();
+        if (!r.ok) { alert(d.error || 'Error al exportar'); return; }
+
+        const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `tests_${uname}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    }
+
+    async function handleSend() {
+      const msg = inputEl.value.trim();
+      if (!msg || !executionId) return;
+      if (btnSend && btnSend.disabled) return;
+      addMsg('user', msg);
+      inputEl.value = '';
+      // Mostrar skeleton de "escribiendo" mientras llega la respuesta
+      const typingContainer = document.createElement('div');
+      typingContainer.className = 'msg assistant';
+      typingContainer.innerHTML = '<div class="typing-skeleton" style="height:14px;width:70%"></div><div class="typing-skeleton" style="height:14px;width:40%;margin-top:6px"></div>';
+      chatDiv.appendChild(typingContainer);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+      if (btnSend) btnSend.disabled = true;
+      const r = await fetch(`/api/test/${executionId}/continue/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ message: msg })
+      });
+      const d = await r.json();
+      // Quitar skeleton y manejar respuesta
+      typingContainer.remove();
+      if (btnSend) btnSend.disabled = false;
+      if (!r.ok) { alert(d.error || 'Error al continuar'); return; }
+      addMsg('assistant', d.response);
+    }
+    if (btnSend) btnSend.addEventListener('click', handleSend);
+    if (inputEl) inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); handleSend(); }
+    });
+
+    if (btnFinish) btnFinish.addEventListener('click', async () => {
+      if (!executionId) return;
+      const r = await fetch(`/api/test/${executionId}/finish/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrftoken }
+      });
+      const d = await r.json();
+      if (!r.ok) { alert(d.error || 'Error al finalizar'); return; }
+      // No mostrar resultados al usuario, solo un mensaje de confirmación
+      const evalDiv = document.getElementById('eval');
+      if (evalDiv) evalDiv.textContent = 'Test finalizado correctamente.';
+      // Deshabilitar controles de envío tras finalizar
+      if (btnSend) btnSend.disabled = true;
+      if (btnFinish) btnFinish.disabled = true;
+    });
+
+    if (btnDownload) {
+      btnDownload.addEventListener('click', async () => {
+        if (!executionId) return;
+        const r = await fetch(`/api/test/${executionId}/log/`);
+        const d = await r.json();
+        if (!r.ok) { alert(d.error || 'Error al obtener log'); return; }
+
+        const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `test_${executionId}_log.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    }
+  </script>
+{% endblock %}
