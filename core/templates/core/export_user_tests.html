@@ -1,0 +1,127 @@
+{% extends 'core/base.html' %}
+{% block title %}Exportación HTML de Tests{% endblock %}
+{% block extra_styles %}
+<style>
+  .export-header { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; }
+  .exp-summary { color: var(--muted); }
+  .exec-card { border: 1px solid var(--border); border-radius: 12px; padding: 1rem; background: #fff; margin: 0.75rem 0; }
+  .exec-title { margin: 0; font-size: 1.1rem; }
+  .exec-meta { color: var(--muted); font-size: 0.9rem; }
+  .chat-log { margin-top: 0.5rem; }
+  .chat-item { padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--border); margin: 6px 0; }
+  .chat-item.user { background: #eef6ff; }
+  .chat-item.assistant { background: #f7f7f7; }
+  .eval-block { margin-top: 0.75rem; }
+  .code { font-family: ui-monospace, Menlo, Consolas, monospace; background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; white-space: pre-wrap; }
+  .pill { display:inline-block; padding:0.1rem 0.5rem; border-radius:999px; background:#eef6ff; border:1px solid #c8eaf5; color:#085ed0; font-size:0.8rem; }
+  .eval-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:0.5rem; }
+  .eval-item { border:1px solid var(--border); border-radius:8px; padding:0.5rem; background:#fff; }
+  .kv-list { list-style:none; margin:0.25rem 0 0; padding:0; }
+  .kv-list li { padding:0.2rem 0; border-bottom:1px dashed var(--border); }
+  .kv-list li:last-child { border-bottom:none; }
+  .kv-key { color: var(--muted); margin-right: 0.25rem; }
+  @media (max-width: 768px) {
+    .export-header { flex-wrap: wrap; }
+    .eval-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+  <div class="export-header">
+    <div>
+      <h2 style="margin:0">Exportación de tests por usuario</h2>
+      {% if username %}
+        <span class="exp-summary">Usuario: <strong>{{ username }}</strong> · Total ejecuciones: {{ count }}</span>
+      {% endif %}
+    </div>
+    <button class="btn" onclick="downloadHTML()">Descargar HTML</button>
+  </div>
+
+  {% if error %}
+    <div class="msg-error">{{ error }}</div>
+  {% endif %}
+
+  {% if executions %}
+    {% for ex in executions %}
+      <details class="exec-card">
+        <summary>
+          <strong>{{ ex.test.name }}</strong>
+          <span class="exec-meta">
+            · Inicio: {{ ex.start_time }} {% if ex.finish_time %} · Fin: {{ ex.finish_time }}{% endif %} · ID: {{ ex.id }}
+          </span>
+        </summary>
+
+        <div class="chat-log">
+          <h4 style="margin:0.5rem 0">Conversación</h4>
+          {% if ex.chat_log %}
+            {% for turn in ex.chat_log %}
+              <div class="chat-item {{ turn.role }}">
+                <strong>{{ turn.role|title }}:</strong>
+                <div>{{ turn.content }}</div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="muted">(Sin mensajes registrados)</div>
+          {% endif %}
+        </div>
+
+        <div class="eval-block">
+          <h4 style="margin:0.5rem 0">Evaluación</h4>
+          {% if ex.evaluation_result %}
+            {% if ex.evaluation_result.error %}
+              <span class="pill">Error: {{ ex.evaluation_result.error }}</span>
+            {% else %}
+              <div class="eval-grid">
+                {% for key, value in ex.evaluation_result.items %}
+                  <div class="eval-item">
+                    <strong>
+                      {% if key == 'score' %}Puntuación{% elif key == 'summary' %}Resumen{% else %}{{ key|title }}{% endif %}
+                    </strong>
+                    {% if value.items %}
+                      <ul class="kv-list">
+                        {% for k2, v2 in value.items %}
+                          <li>
+                            <span class="kv-key">
+                              {% if k2 == 'score' %}Puntuación{% elif k2 == 'summary' %}Resumen{% else %}{{ k2|title }}{% endif %}:
+                            </span>
+                            <span class="kv-val">{{ v2 }}</span>
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <div style="margin-top:0.25rem;">{{ value }}</div>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          {% else %}
+            <div class="muted">(No hay evaluación registrada)</div>
+          {% endif %}
+        </div>
+      </details>
+    {% endfor %}
+  {% else %}
+    {% if not error %}
+      <div class="muted">No hay ejecuciones para este usuario.</div>
+    {% endif %}
+  {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function downloadHTML() {
+  const name = '{{ username|default:"export" }}';
+  const doc = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+  const blob = new Blob([doc], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `tests_${name}.html`;
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(a.href);
+  a.remove();
+}
+</script>
+{% endblock %}

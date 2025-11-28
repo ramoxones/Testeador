@@ -24,6 +24,7 @@
         .tests-item { display:flex; align-items:center; gap:0.5rem; padding:0.5rem; border-bottom:1px solid var(--border); }
         .tests-item:last-child { border-bottom:none; }
         .tests-name { flex:1; }
+        .count-badge { display:inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; background:#eef6ff; border:1px solid #c8eaf5; color:#085ed0; font-size: 0.8rem; }
       </style>
       <div class="card" style="margin-top:0.25rem; width:100%; max-width:800px;">
         <h3 style="margin-top:0">Listado de tests</h3>
@@ -72,12 +73,9 @@
       </div>
       <hr style="margin:1rem 0; border:none; border-top:1px solid var(--border);">
       <div class="card" style="margin-top:0.25rem; width:100%; max-width:800px;">
-        <h3 style="margin-top:0">Descargar tests</h3>
-        <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
-          <label for="usernameExport">Descargar tests por usuario:</label>
-          <input id="usernameExport" type="text" placeholder="usuario" />
-          <button class="btn" id="btnExportByUser">Descargar JSON</button>
-        </div>
+        <h3 style="margin-top:0">Ver tests por usuario</h3>
+        <small class="mono">Selecciona un usuario para abrir su exportación HTML.</small>
+        <ul id="usersExportList" class="tests-list"></ul>
       </div>
     </div>
     
@@ -106,6 +104,17 @@
     .msg.user { margin-left: auto; background: #dcf7ff; border-color: #c8eaf5; }
     .controls { position: sticky; bottom: 0; background: #fff; z-index: 1; gap: 0.5rem; padding: 0.5rem 0; border-top: 1px solid var(--border); }
     @keyframes sk-shimmer { 0%{ background-position: 0 0 } 100%{ background-position: -200% 0 } }
+    /* Responsive chat + admin */
+    @media (max-width: 768px) {
+      #testArea { max-width: 100%; }
+      #chat { max-height: 50vh; min-height: 40vh; }
+      .msg { max-width: 100%; }
+      .controls { gap: 0.5rem; }
+      .controls input { flex: 1 1 100%; }
+      .controls .btn { flex: 1 1 100%; }
+      .two-cols { flex-direction: column; }
+      .subcard { padding: 0.5rem; }
+    }
   </style>
   <div id="loadingSkeleton" class="skeleton">
     <div class="sk-block sk-line" style="width: 60%"></div>
@@ -427,22 +436,48 @@
       });
     }
 
-    if (btnExportByUser) {
-      btnExportByUser.addEventListener('click', async () => {
-        const uname = (usernameExport.value || '').trim();
-        if (!uname) { alert('Introduce el nombre de usuario'); return; }
-        const r = await fetch(`/api/tests/export_by_user/?username=${encodeURIComponent(uname)}`);
+    async function loadExportUsers() {
+      try {
+        const r = await fetch('/api/users/list_with_execs/');
         const d = await r.json();
-        if (!r.ok) { alert(d.error || 'Error al exportar'); return; }
-
-        const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `tests_${uname}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      });
+        if (!r.ok) { throw new Error(d.error || 'Error al listar usuarios'); }
+        const list = document.getElementById('usersExportList');
+        list.innerHTML = '';
+        if (!d.users || !d.users.length) {
+          list.innerHTML = '<li class="tests-item"><div class="tests-name">No hay usuarios con ejecuciones</div></li>';
+          return;
+        }
+        d.users.forEach(u => {
+          const li = document.createElement('li');
+          li.className = 'tests-item';
+          const nameDiv = document.createElement('div');
+          nameDiv.className = 'tests-name';
+          const nameText = document.createElement('span');
+          nameText.textContent = u.username;
+          const countBadge = document.createElement('span');
+          countBadge.className = 'count-badge';
+          countBadge.textContent = `${u.exec_count} tests`;
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-small';
+          btn.textContent = 'Ver HTML';
+          btn.addEventListener('click', () => {
+            const url = `/export/tests/by_user/?username=${encodeURIComponent(u.username)}`;
+            window.open(url, '_blank');
+          });
+          nameDiv.appendChild(nameText);
+          nameDiv.appendChild(document.createTextNode(' '));
+          nameDiv.appendChild(countBadge);
+          li.appendChild(nameDiv);
+          li.appendChild(btn);
+          list.appendChild(li);
+        });
+      } catch (e) {
+        alert(e.message || 'Error');
+      }
+    }
+    // Cargar usuarios al abrir el panel admin
+    if (testsListEl) {
+      loadExportUsers();
     }
 
     async function handleSend() {

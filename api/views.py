@@ -8,6 +8,7 @@ from django.utils import timezone
 from api.ai_service import OpenRouterAIService
 from core.models import Test, TestExecution
 from django.contrib.auth.models import User
+from django.db.models import Count
 
 
 # Create your views here.
@@ -370,6 +371,26 @@ class ExportTestsByUserView(APIView):
             "username": username,
             "count": executions.count(),
             "executions": data,
+        }, status=status.HTTP_200_OK)
+
+
+class ListUsersWithExecutionsView(APIView):
+    # Lista usuarios que tienen ejecuciones, con conteo (solo admin)
+    def get(self, request):
+        if not request.user.is_authenticated or not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "No autorizado"}, status=status.HTTP_403_FORBIDDEN)
+
+        users = User.objects.filter(testexecution__isnull=False).annotate(exec_count=Count('testexecution')).order_by('-exec_count', 'username')
+        data = [{
+            "id": u.id,
+            "username": u.username,
+            "full_name": (f"{u.first_name} {u.last_name}".strip() or u.username),
+            "exec_count": u.exec_count,
+        } for u in users]
+
+        return Response({
+            "count": len(data),
+            "users": data,
         }, status=status.HTTP_200_OK)
 
 

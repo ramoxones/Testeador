@@ -4,7 +4,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.views.decorators.http import require_http_methods
-from .models import Entity, EntityProfile
+from django.http import HttpResponseForbidden
+from .models import Entity, EntityProfile, TestExecution
 
 
 @require_http_methods(["GET", "POST"])
@@ -66,3 +67,37 @@ def logout_view(request):
 @login_required
 def dashboard(request):
     return render(request, 'core/dashboard.html', {})
+
+
+@require_http_methods(["GET"])
+@login_required
+def export_tests_by_user_html(request):
+    # Solo personal con permisos
+    if not (request.user.is_staff or request.user.is_superuser):
+        return HttpResponseForbidden("No autorizado")
+
+    username = (request.GET.get('username') or '').strip()
+    if not username:
+        return render(request, 'core/export_user_tests.html', {
+            'error': "Parámetro 'username' requerido",
+            'username': None,
+            'executions': [],
+            'count': 0,
+        })
+
+    user = User.objects.filter(username=username).first()
+    if not user:
+        return render(request, 'core/export_user_tests.html', {
+            'error': "Usuario no encontrado",
+            'username': username,
+            'executions': [],
+            'count': 0,
+        })
+
+    executions = TestExecution.objects.filter(user=user).order_by('-start_time')
+    return render(request, 'core/export_user_tests.html', {
+        'error': None,
+        'username': username,
+        'executions': executions,
+        'count': executions.count(),
+    })

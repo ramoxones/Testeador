@@ -37,6 +37,16 @@
     .msg-error { color: #b00020; margin-bottom: 0.75rem; }
     .grid { display: grid; gap: 0.75rem; }
     .muted { color: var(--muted); margin-right: 0.75rem; }
+    /* --- Responsive global --- */
+    @media (max-width: 768px) {
+      .container { padding: 1rem; }
+      .topbar { flex-wrap: wrap; gap: 0.5rem; }
+      .topbar h1 { font-size: 1rem; }
+      .card, .chat { padding: 0.75rem; }
+      .controls { flex-wrap: wrap; }
+      input, select { width: 100%; }
+      .btn { padding: 0.6rem 0.8rem; }
+    }
   </style>
   {% block extra_styles %}{% endblock %}
   {% block head %}{% endblock %}

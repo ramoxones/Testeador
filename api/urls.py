@@ -10,6 +10,7 @@ from .views import (
     ExportTestsByUserView,
     ListTestsView,
     DeleteTestView,
+    ListUsersWithExecutionsView,
 )
 
 urlpatterns = [
@@ -35,4 +36,6 @@ urlpatterns = [
     path('tests/list/', ListTestsView.as_view(), name='tests-list'),
     # DELETE /api/tests/<id>/delete/ --> Elimina un test (solo admin)
     path('tests/<int:test_id>/delete/', DeleteTestView.as_view(), name='tests-delete'),
+    # GET /api/users/list_with_execs/ --> Lista usuarios con ejecuciones (solo admin)
+    path('users/list_with_execs/', ListUsersWithExecutionsView.as_view(), name='users-list-with-execs'),
 ]
